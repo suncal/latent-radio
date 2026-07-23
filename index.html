@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Latent Radio — AI-native communication you can test</title>
+<meta name="description" content="A neural transmitter and receiver running live in your browser. Pick or draw an image, dial the channel noise, and watch a shared-model 'semantic radio' beat classical digital coding.">
+<style>
+  :root{
+    --bg:#0b0f19; --panel:#111827; --line:#1f2937; --ink:#e5e7eb; --mut:#9ca3af;
+    --radio:#818cf8; --digital:#f59e0b; --bad:#ef4444; --good:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:30px;margin:0 0 4px;letter-spacing:-.02em}
+  .tag{display:inline-block;font-size:12px;font-weight:600;color:var(--radio);
+    border:1px solid #3730a3;background:#12142b;border-radius:999px;padding:3px 10px;margin-bottom:12px}
+  .sub{color:var(--mut);margin:0 0 22px;max-width:70ch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:16px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .imgbox{background:#0b0f19;border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center}
+  canvas{image-rendering:pixelated;border-radius:6px;width:100%;max-width:220px;aspect-ratio:1;background:#000;touch-action:none}
+  .imgbox h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+  .psnr{font-size:22px;font-weight:700;margin-top:8px;font-variant-numeric:tabular-nums}
+  .cap{font-size:12px;color:var(--mut);margin-top:2px;min-height:2.4em}
+  .controls{display:flex;flex-wrap:wrap;gap:20px;align-items:center;margin-top:6px}
+  .snrwrap{flex:1;min-width:260px}
+  .snrwrap label{display:flex;justify-content:space-between;font-size:13px;color:var(--mut);margin-bottom:6px}
+  .snrval{color:var(--ink);font-weight:700}
+  input[type=range]{width:100%;accent-color:var(--radio)}
+  .quality{font-size:12px}
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tab{font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);
+    background:#0b0f19;color:var(--mut);cursor:pointer}
+  .tab.on{color:var(--ink);border-color:var(--radio);background:#12142b}
+  .thumbs{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+  .thumbs canvas{width:100%;max-width:none;cursor:pointer;border:2px solid transparent}
+  .thumbs canvas.sel{border-color:var(--radio)}
+  .drawtools{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;color:var(--mut)}
+  button.mini{font-size:12px;padding:5px 10px;border-radius:7px;border:1px solid var(--line);
+    background:#0b0f19;color:var(--ink);cursor:pointer}
+  .toggle{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px}
+  .switch{position:relative;width:44px;height:24px;flex:none}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#374151;border-radius:999px;transition:.2s;cursor:pointer}
+  .slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+  .switch input:checked+.slider{background:var(--bad)}
+  .switch input:checked+.slider:before{transform:translateX(20px)}
+  .status{font-size:13px;color:var(--mut);margin-top:6px;min-height:1.4em}
+  .explain{margin-top:26px}
+  .explain h2{font-size:19px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .explain p{color:#cbd5e1;max-width:75ch}
+  .foot{margin-top:26px;color:var(--mut);font-size:13px}
+  a{color:var(--radio)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .loader{color:var(--mut);font-size:14px}
+  code{background:#1f2937;padding:1px 6px;border-radius:4px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tag">RUNS LIVE IN YOUR BROWSER · NO SERVER</div>
+  <h1>Latent Radio</h1>
+  <p class="sub">A neural <b>transmitter</b> and <b>receiver</b> — trained together as one shared model —
+  sending a picture through a noisy channel. Because both ends share the model, they transmit <i>meaning</i>,
+  not bits, and the picture survives noise that wrecks a classical digital link. Pick a sample or draw your own,
+  then drag the channel noise and watch.</p>
+
+  <div class="card">
+    <div class="controls">
+      <div class="snrwrap">
+        <label><span>Channel quality (signal-to-noise ratio)</span>
+          <span><span class="snrval" id="snrval">6</span> dB</span></label>
+        <input type="range" id="snr" min="-6" max="14" step="1" value="6">
+        <div class="quality" id="quality"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="imgbox">
+        <h3>What you send</h3>
+        <canvas id="orig" width="28" height="28"></canvas>
+        <div class="tabs" style="justify-content:center;margin-top:10px">
+          <div class="tab on" id="tabGallery">Samples</div>
+          <div class="tab" id="tabDraw">Draw</div>
+        </div>
+        <div id="galleryPane">
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+        <div id="drawPane" style="display:none">
+          <div class="drawtools">
+            <span>Draw white on black</span>
+            <button class="mini" id="clearBtn">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="imgbox">
+        <h3><span class="dot" style="background:var(--radio)"></span>Latent Radio</h3>
+        <canvas id="radio" width="28" height="28"></canvas>
+        <div class="psnr" id="radioPsnr" style="color:var(--radio)">— dB</div>
+        <div class="cap" id="radioCap">reconstruction quality</div>
+      </div>
+
+      <div class="imgbox">
+        <h3><span class="dot" style="background:var(--digital)"></span>Classical digital</h3>
+        <canvas id="digital" width="28" height="28"></canvas>
+        <div class="psnr" id="digPsnr" style="color:var(--digital)">— dB</div>
+        <div class="cap" id="digCap">transform coding at channel capacity</div>
+      </div>
+    </div>
+
+    <div class="toggle">
+      <label class="switch"><input type="checkbox" id="mismatch"><span class="slider"></span></label>
+      <span>Use a <b>mismatched receiver</b> — a decoder from a different training run (tests the "both ends must share the same model" rule)</span>
+    </div>
+    <div class="status" id="status">loading the neural transmitter &amp; receiver…</div>
+  </div>
+
+  <div class="explain">
+    <h2>What am I looking at?</h2>
+    <p>Every wireless system today <b>separates</b> two jobs: squeeze the image into bits (compression), then
+    wrap those bits in error-correction (channel coding). Claude Shannon proved that split is optimal — but only
+    for infinitely long messages. For a real image over a real noisy channel, a single neural network trained to
+    do <b>both jobs at once</b> can do better, and it fails <i>gracefully</i>: as the channel gets noisier the
+    picture gets blurrier, instead of the classical system's all-or-nothing "cliff" where it works perfectly and
+    then suddenly decodes to garbage. Slide the noise down to −6 dB and watch the difference.</p>
+    <p>The catch, which you can trigger with the toggle: the transmitter and receiver must share the <b>exact same
+    model</b>. Flip in a decoder from a different training run and the link produces nonsense even on a perfect
+    channel — there's no universal standard here the way there is for Wi-Fi. The "protocol" is the shared weights.
+    That open problem — how independent devices agree on a shared model — is the real thing standing between this
+    idea and a new kind of radio.</p>
+  </div>
+
+  <div class="foot">
+    Trained from scratch on Fashion-MNIST · 932K-parameter convolutional transceiver · runs via ONNX Runtime Web.
+    <span id="ghlink"></span>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<script>
+const K = 128;
+let enc, dec, dec1, gallery = [], current = new Float32Array(28*28), useMismatch = false, drawMode = false;
+
+// ---------- rendering ----------
+function draw(canvasId, data){
+  const cv = document.getElementById(canvasId);
+  const ctx = cv.getContext('2d');
+  const im = ctx.createImageData(28,28);
+  for(let i=0;i<28*28;i++){
+    const v = Math.max(0,Math.min(1,data[i]))*255|0;
+    im.data[i*4]=v; im.data[i*4+1]=v; im.data[i*4+2]=v; im.data[i*4+3]=255;
+  }
+  ctx.putImageData(im,0,0);
+}
+function psnr(a,b){
+  let mse=0; for(let i=0;i<a.length;i++){const d=a[i]-b[i]; mse+=d*d;}
+  mse/=a.length; return 10*Math.log10(1/(mse+1e-9));
+}
+// ---------- channel ----------
+function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function snrLin(db){ return Math.pow(10, db/10); }
+
+// ---------- neural transceiver (live ONNX) ----------
+async function runNeural(img, snrDb){
+  const t = new ort.Tensor('float32', Float32Array.from(img), [1,1,28,28]);
+  const sym = (await enc.run({image:t})).symbols.data;      // 128 power-normalized symbols
+  const sigma = Math.sqrt(1/snrLin(snrDb));
+  const noisy = Float32Array.from(sym, s => s + sigma*gauss());
+  const decoder = useMismatch ? dec1 : dec;
+  const rec = (await decoder.run({symbols:new ort.Tensor('float32',noisy,[1,K])})).recon.data;
+  return rec;
+}
+
+// ---------- classical digital baseline (DCT transform coding + capacity) ----------
+const N=28, D=[];
+(function(){ for(let k=0;k<N;k++){ D[k]=[]; const a=k===0?Math.sqrt(1/N):Math.sqrt(2/N);
+  for(let n=0;n<N;n++) D[k][n]=a*Math.cos(Math.PI*(2*n+1)*k/(2*N)); } })();
+function matmul(A,B){ const r=A.length,c=B[0].length,m=B.length,O=[];
+  for(let i=0;i<r;i++){O[i]=new Float64Array(c); for(let j=0;j<c;j++){let s=0;
+    for(let t=0;t<m;t++)s+=A[i][t]*B[t][j]; O[i][j]=s;}} return O; }
+function transpose(M){ const r=M.length,c=M[0].length,O=[];
+  for(let j=0;j<c;j++){O[j]=new Float64Array(r); for(let i=0;i<r;i++)O[j][i]=M[i][j];} return O; }
+const DT=transpose(D);
+function to2d(v){const M=[];for(let i=0;i<N;i++){M[i]=new Float64Array(N);for(let j=0;j<N;j++)M[i][j]=v[i*N+j];}return M;}
+function dct2(v){ return matmul(matmul(D,to2d(v)),DT); }
+function idct2(C){ return matmul(matmul(DT,C),D); }
+function digital(img, snrDb){
+  const capacity = K*0.5*Math.log2(1+snrLin(snrDb));   // bits available
+  const BITS_PER_COEF = 16;                            // 6-bit value + ~10-bit position/overhead
+  const M = Math.floor(capacity/BITS_PER_COEF);        // how many DCT coeffs we can afford
+  const mean = img.reduce((a,b)=>a+b,0)/img.length;
+  if(M<1){ return {rec:new Float32Array(img.length).fill(mean), bits:0, coeffs:0}; }
+  const C = dct2(img);
+  const flat=[]; for(let i=0;i<N;i++)for(let j=0;j<N;j++)flat.push({i,j,v:C[i][j]});
+  flat.sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+  const keep = flat.slice(0,M);
+  const maxAbs = Math.abs(keep[0].v)||1;
+  const Kq = new Array(N).fill(0).map(()=>new Float64Array(N));
+  for(const c of keep){ const step=2*maxAbs/63; Kq[c.i][c.j]=Math.round(c.v/step)*step; } // 6-bit quantize
+  const R = idct2(Kq);
+  const rec = new Float32Array(img.length);
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++)rec[i*N+j]=Math.max(0,Math.min(1,R[i][j]));
+  return {rec, bits:Math.round(capacity), coeffs:M};
+}
+
+// ---------- orchestration ----------
+let pending=false, dirty=false;
+async function update(){
+  if(!enc||!dec){ return; }
+  if(pending){ dirty=true; return; }
+  pending=true;
+  const snrDb = +document.getElementById('snr').value;
+  draw('orig', current);
+  // neural
+  const rec = await runNeural(current, snrDb);
+  draw('radio', rec);
+  const p = psnr(current, rec);
+  document.getElementById('radioPsnr').textContent = p.toFixed(1)+' dB';
+  document.getElementById('radioCap').textContent = useMismatch
+     ? 'mismatched decoder — the link is broken' : 'shared-model reconstruction';
+  document.getElementById('radioCap').style.color = useMismatch ? 'var(--bad)' : '';
+  // digital
+  const dg = digital(current, snrDb);
+  draw('digital', dg.rec);
+  const dp = psnr(current, dg.rec);
+  document.getElementById('digPsnr').textContent = dp.toFixed(1)+' dB';
+  document.getElementById('digCap').textContent = dg.coeffs<1
+     ? 'below capacity — total outage (blank average)'
+     : `${dg.bits} bits · ${dg.coeffs} DCT coefficients survive`;
+  pending=false;
+  if(dirty){ dirty=false; update(); }
+}
+
+function setQuality(){
+  const db=+document.getElementById('snr').value;
+  document.getElementById('snrval').textContent=db;
+  let t; if(db<=-4)t='very noisy channel'; else if(db<=2)t='noisy channel';
+  else if(db<=8)t='moderate channel'; else t='clean channel';
+  document.getElementById('quality').textContent=t;
+}
+
+// ---------- inputs: gallery + draw ----------
+function makeThumb(px, idx){
+  const cv=document.createElement('canvas'); cv.width=28; cv.height=28;
+  const ctx=cv.getContext('2d'); const im=ctx.createImageData(28,28);
+  for(let i=0;i<784;i++){const v=px[i]; im.data[i*4]=v;im.data[i*4+1]=v;im.data[i*4+2]=v;im.data[i*4+3]=255;}
+  ctx.putImageData(im,0,0);
+  cv.onclick=()=>{ document.querySelectorAll('#thumbs canvas').forEach(c=>c.classList.remove('sel'));
+    cv.classList.add('sel');
+    current = Float32Array.from(px, v=>v/255); update(); };
+  cv.dataset.idx=idx; return cv;
+}
+function initGallery(imgs){
+  gallery=imgs; const box=document.getElementById('thumbs');
+  imgs.forEach((px,idx)=> box.appendChild(makeThumb(px,idx)));
+  box.firstChild.classList.add('sel');
+  current = Float32Array.from(imgs[0], v=>v/255);
+}
+// drawing
+let drawing=false;
+function setupDraw(){
+  const cv=document.getElementById('orig');
+  function paint(e){
+    if(!drawing || !drawMode) return;
+    const r=cv.getBoundingClientRect();
+    const x=Math.floor(((e.touches?e.touches[0].clientX:e.clientX)-r.left)/r.width*28);
+    const y=Math.floor(((e.touches?e.touches[0].clientY:e.clientY)-r.top)/r.height*28);
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const xx=x+dx,yy=y+dy; if(xx<0||yy<0||xx>=28||yy>=28)continue;
+      const w=(dx===0&&dy===0)?1:0.5;
+      current[yy*28+xx]=Math.min(1,current[yy*28+xx]+w);
+    }
+    update();
+  }
+  const start=e=>{ if(!drawMode) return; drawing=true;paint(e);e.preventDefault();};
+  const end=()=>{drawing=false;};
+  cv.addEventListener('mousedown',start); cv.addEventListener('mousemove',paint);
+  window.addEventListener('mouseup',end);
+  cv.addEventListener('touchstart',start); cv.addEventListener('touchmove',paint);
+  cv.addEventListener('touchend',end);
+}
+document.getElementById('clearBtn').onclick=()=>{ current=new Float32Array(784); update(); };
+document.getElementById('tabGallery').onclick=()=>{
+  drawMode=false;
+  document.getElementById('tabGallery').classList.add('on');
+  document.getElementById('tabDraw').classList.remove('on');
+  document.getElementById('galleryPane').style.display='';
+  document.getElementById('drawPane').style.display='none';
+  const sel=document.querySelector('#thumbs canvas.sel')||document.querySelector('#thumbs canvas');
+  if(sel) sel.click();
+};
+document.getElementById('tabDraw').onclick=()=>{
+  drawMode=true;
+  document.getElementById('tabDraw').classList.add('on');
+  document.getElementById('tabGallery').classList.remove('on');
+  document.getElementById('drawPane').style.display='';
+  document.getElementById('galleryPane').style.display='none';
+  current=new Float32Array(784); update();
+};
+document.getElementById('snr').addEventListener('input',()=>{setQuality();update();});
+document.getElementById('mismatch').addEventListener('change',e=>{useMismatch=e.target.checked;update();});
+
+// ---------- boot ----------
+async function boot(){
+  setQuality(); setupDraw();
+  document.getElementById('ghlink').innerHTML =
+    'Source &amp; the full research report: <a href="https://github.com/suncal/latent-radio">github.com/suncal/latent-radio</a>';
+  try{
+    ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/';
+    ort.env.wasm.numThreads=1;
+    const gal = await (await fetch('gallery.json')).json();
+    initGallery(gal.images);
+    document.getElementById('status').textContent='loading model weights…';
+    [enc,dec,dec1] = await Promise.all([
+      ort.InferenceSession.create('encoder.onnx'),
+      ort.InferenceSession.create('decoder.onnx'),
+      ort.InferenceSession.create('decoder1.onnx'),
+    ]);
+    document.getElementById('status').innerHTML=
+      '<span style="color:var(--good)">●</span> live — drag the noise slider, pick a sample, or draw your own';
+    update();
+  }catch(err){
+    document.getElementById('status').innerHTML=
+      '<span style="color:var(--bad)">Could not load the model:</span> '+err;
+    console.error(err);
+  }
+}
+boot();
+</script>
+</body>
+</html>
